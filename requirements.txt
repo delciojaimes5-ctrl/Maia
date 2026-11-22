@@ -1,0 +1,12 @@
+# SmartAccess / Maiia — dependências
+# Instalar:  pip install -r requirements.txt
+
+Flask[async]>=3.0,<4      # [async] = asgiref; as rotas /api/maiia/* são async
+Werkzeug>=3.0,<4
+python-dotenv>=1.0
+mysql-connector-python>=8.3
+numpy>=1.26
+opencv-python>=4.10          # FaceDetectorYN + FaceRecognizerSF (YuNet/SFace)
+groq>=0.11
+edge-tts>=6.1
+pyserial>=3.5

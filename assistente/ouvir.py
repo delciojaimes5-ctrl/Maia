@@ -6,14 +6,30 @@ from groq import Groq
 
 load_dotenv()
 
-API_KEY = os.getenv("GROQ_API_KEY")
-
-if not API_KEY:
-    raise RuntimeError("GROQ_API_KEY não encontrada.")
-
-cliente = Groq(api_key=API_KEY)
-
 MODELO = "whisper-large-v3-turbo"
+
+_cliente = None
+
+
+def obter_cliente():
+    """
+    Cria o cliente Groq à primeira utilização.
+
+    Mantém a aplicação arrancável sem a GROQ_API_KEY configurada.
+    """
+
+    global _cliente
+
+    if _cliente is None:
+
+        chave = os.getenv("GROQ_API_KEY")
+
+        if not chave:
+            raise RuntimeError("GROQ_API_KEY não encontrada.")
+
+        _cliente = Groq(api_key=chave)
+
+    return _cliente
 
 
 def transcrever_audio(arquivo):
@@ -41,7 +57,7 @@ def transcrever_audio(arquivo):
         raise ValueError("O ficheiro de áudio está vazio.")
 
     try:
-        transcricao = cliente.audio.transcriptions.create(
+        transcricao = obter_cliente().audio.transcriptions.create(
             file=(nome, audio),
             model=MODELO,
             language="pt",
