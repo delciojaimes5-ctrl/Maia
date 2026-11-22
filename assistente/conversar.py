@@ -10,15 +10,34 @@ from groq import Groq
 
 load_dotenv()
 
-API_KEY = os.getenv("GROQ_API_KEY")
 MODELO = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 
-if not API_KEY:
-    raise RuntimeError(
-        "GROQ_API_KEY não foi encontrada no ficheiro .env"
-    )
+_cliente = None
 
-cliente = Groq(api_key=API_KEY)
+
+def obter_cliente():
+    """
+    Cria o cliente Groq à primeira utilização.
+
+    Assim a aplicação arranca (e as páginas abrem) mesmo sem a
+    GROQ_API_KEY configurada: só as rotas que falam com a Groq falham,
+    com uma mensagem clara.
+    """
+
+    global _cliente
+
+    if _cliente is None:
+
+        chave = os.getenv("GROQ_API_KEY")
+
+        if not chave:
+            raise RuntimeError(
+                "GROQ_API_KEY não foi encontrada no ficheiro .env"
+            )
+
+        _cliente = Groq(api_key=chave)
+
+    return _cliente
 
 
 # =====================================================
@@ -116,7 +135,7 @@ def gerar_resposta(mensagens):
 
     try:
 
-        resposta = cliente.chat.completions.create(
+        resposta = obter_cliente().chat.completions.create(
             model=MODELO,
             messages=historico,
             max_completion_tokens=700,
