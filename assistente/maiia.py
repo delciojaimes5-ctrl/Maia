@@ -9,7 +9,6 @@ from assistente.falar import gerar_audio
 from assistente.comandos import (
     normalizar_palavras,
     planear_comandos,
-    CONFIRMACOES,
     CANCELAMENTOS,
 )
 
@@ -99,6 +98,18 @@ FALHA_EXECUCAO = (
 
 MENSAGENS_FALHA = {SEM_CONTROLO, FALHA_LIGACAO, FALHA_EXECUCAO}
 
+FALHA_PARCIAL_ARDUINO = (
+    " Quanto ao resto, não consegui confirmar com o Arduino."
+)
+
+FALHA_PARCIAL_CONTROLO = (
+    " Quanto ao resto, não tenho controlo das lâmpadas."
+)
+
+FALHA_PARCIAL_EXECUCAO = (
+    " Quanto ao resto, não consegui executar o comando."
+)
+
 RESPOSTAS_COMANDO = {
     "LAMP1_ON": "A primeira lâmpada está ligada.",
     "LAMP1_OFF": "A primeira lâmpada está desligada.",
@@ -133,6 +144,42 @@ def executar_comando_lampada(comando, executar_comando):
         return FALHA_EXECUCAO
 
 
+def _mensagem_falha_total(falhas):
+    """
+    Nada foi confirmado: dizer a causa real, não sempre a mesma.
+
+    Sem controlo das lâmpadas (`SEM_CONTROLO`) não é uma falha de
+    ligação ao Arduino, e um erro ao executar também não.
+    """
+
+    distintas = set(falhas)
+
+    if len(distintas) == 1:
+        return falhas[0]
+
+    if FALHA_LIGACAO in distintas:
+        return FALHA_LIGACAO
+
+    if FALHA_EXECUCAO in distintas:
+        return FALHA_EXECUCAO
+
+    return SEM_CONTROLO
+
+
+def _mensagem_falha_parcial(falhas):
+    """Parte confirmada, parte não: dizer o que falhou sem inventar."""
+
+    distintas = set(falhas)
+
+    if FALHA_LIGACAO in distintas:
+        return FALHA_PARCIAL_ARDUINO
+
+    if distintas == {SEM_CONTROLO}:
+        return FALHA_PARCIAL_CONTROLO
+
+    return FALHA_PARCIAL_EXECUCAO
+
+
 def executar_comandos(comandos, executar_comando):
     """
     Executa uma lista de comandos e agrega o resultado sem perder nenhum.
@@ -141,30 +188,28 @@ def executar_comandos(comandos, executar_comando):
     não foi — nunca apresenta como concluído o que não foi confirmado.
     """
 
+    if not comandos:
+        return "Não recebi nenhum comando para executar."
+
     respostas = []
-    falhas = 0
+    falhas = []
 
     for comando in comandos:
 
         mensagem = executar_comando_lampada(comando, executar_comando)
 
         if mensagem in MENSAGENS_FALHA:
-            falhas += 1
+            falhas.append(mensagem)
         else:
             respostas.append(mensagem)
 
     if not respostas:
-        return (
-            "Não consegui comunicar com o Arduino. "
-            "Verifica a ligação."
-        )
+        return _mensagem_falha_total(falhas)
 
     texto = " ".join(respostas)
 
     if falhas:
-        texto += (
-            " Quanto ao resto, não consegui confirmar com o Arduino."
-        )
+        texto += _mensagem_falha_parcial(falhas)
 
     return texto
 
@@ -205,7 +250,6 @@ async def processar_audio(
 
     palavras = set(normalizar_palavras(texto_usuario))
 
-    confirmou = bool(palavras & CONFIRMACOES)
     cancelou = bool(palavras & CANCELAMENTOS) or "nao" in palavras
 
     # 4. Pergunta sobre o estado: responder, nunca executar

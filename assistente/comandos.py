@@ -8,12 +8,26 @@ executa é o `maiia.py`, quem conversa é o `conversar.py`.
 Corrige os casos que falhavam na versão anterior:
   - sinónimos, imperativos formais e particípios ("ligue", "acesa",
     "quero a primeira ligada", "bota a primeira acesa");
-  - tolerância a erros de transcrição ("ascende" → "acende");
   - frases com mais do que uma lâmpada ou mais do que uma acção
     ("liga a primeira e a segunda");
-  - "todas menos a primeira" calcula as restantes em vez de ligar tudo;
+  - "todas menos a primeira" calcula as restantes em vez de ligar tudo,
+    mesmo quando a exclusão vem noutra cláusula ("liga todas, menos a
+    primeira");
   - a negação vale por cláusula, não pela frase inteira
-    ("não sei, liga a primeira" executa).
+    ("não sei, liga a primeira" executa);
+  - frases educadas em forma de pergunta ("podes ligar a primeira?")
+    executam, mas perguntas sobre o estado ("está tudo ligado?") não.
+
+Vocabulário explícito, sem tolerância por distância de edição: num
+sistema que mexe em hardware um falso positivo (acender sem ninguém ter
+pedido) custa muito mais do que um falso negativo ("diz de outra
+forma"). Erros de transcrição conhecidos entram à mão nas listas, por
+exemplo:
+  - "ascende" / "ascender" / "ascendem" → acender;
+  - "ligues" / "desligues" / "acendas" / "apagues" → formas do conjuntivo
+    que o reconhecedor devolve em vez do imperativo.
+Cada erro novo que apareça nos registos deve ser acrescentado aqui, com
+o comentário do que era suposto dizer.
 """
 
 import re
@@ -24,26 +38,44 @@ import unicodedata
 # VOCABULÁRIO
 # =========================================================
 
-ACOES_LIGAR = {
-    "liga", "ligar", "ligue", "liguem", "ligo", "ligam",
-    "acende", "acender", "acende", "acendam", "acendo",
-    "ascende", "ascender", "ascendem",
-    "ativa", "ativar", "ative",
-    "bota", "botar", "poe",
+# Imperativo e infinitivo: pedem uma acção.
+VERBOS_LIGAR = {
+    "liga", "ligar", "ligue", "liguem", "ligues", "liguemos",
+    "ligo", "ligam", "ligasses",
+    "acende", "acender", "acenda", "acendam", "acendas", "acendamos",
+    "acendo", "acendesses",
+    # erro de transcrição observado nos registos: "ascende" por "acende"
+    "ascende", "ascender", "ascenda", "ascendam", "ascendas", "ascendem",
+    "ativa", "ativar", "ative", "ativem", "atives",
+    "bota", "botar", "poe", "poem",
     "abre", "abrir",
+}
+
+VERBOS_DESLIGAR = {
+    "desliga", "desligar", "desligue", "desliguem", "desligues",
+    "desligo", "desliguemos", "desligasses",
+    "apaga", "apagar", "apague", "apaguem", "apagues", "apaguemos",
+    "apago", "apagasses",
+    "desativa", "desativar", "desative", "desativem", "desatives",
+    "corta", "cortar", "corte", "cortem", "cortes",
+    "fecha", "fechar", "feche",
+}
+
+PARTICIPIOS_LIGAR = {
     "ligada", "ligado", "ligadas", "ligados",
     "acesa", "aceso", "acesas", "acesos",
 }
 
-ACOES_DESLIGAR = {
-    "desliga", "desligar", "desligue", "desliguem", "desligo",
-    "apaga", "apagar", "apaguem", "apago",
-    "desativa", "desativar", "desative",
-    "corta", "cortar", "corte",
-    "fecha", "fechar",
+PARTICIPIOS_DESLIGAR = {
     "desligada", "desligado", "desligadas", "desligados",
     "apagada", "apagado", "apagadas", "apagados",
 }
+
+# A interpretação da acção aceita as duas formas; a detecção de pergunta
+# só conta com o imperativo/infinitivo.
+ACOES_LIGAR = VERBOS_LIGAR | PARTICIPIOS_LIGAR
+ACOES_DESLIGAR = VERBOS_DESLIGAR | PARTICIPIOS_DESLIGAR
+VERBOS_ORDEM = VERBOS_LIGAR | VERBOS_DESLIGAR
 
 NEGACOES = {"nao", "nunca", "jamais", "nem"}
 
@@ -51,6 +83,12 @@ CONFIRMACOES = {
     "sim", "pode", "podes", "podia", "ok", "okay", "isso",
     "certo", "claro", "confirma", "confirmo", "aceito",
     "aceita", "vamos", "ya", "forca", "exato", "exacto",
+}
+
+# Inícios de frase que são confirmação e não pergunta
+# ("está bem, liga a primeira").
+CONFIRMACOES_INICIAIS = {
+    "esta bem", "esta bom", "esta certo", "esta otimo", "esta optimo",
 }
 
 CANCELAMENTOS = {
@@ -70,19 +108,30 @@ PALAVRAS_PERGUNTA = {
     "porque", "quanto", "quantas", "quantos", "quem", "estado",
 }
 
-NUMEROS = {
+# Ordinais valem sozinhos: "liga a primeira".
+ORDINAIS = {
     "primeira": "LAMP1", "primeiro": "LAMP1",
     "primeiras": "LAMP1", "primeiros": "LAMP1",
-    "um": "LAMP1", "uma": "LAMP1", "1": "LAMP1",
 
     "segunda": "LAMP2", "segundo": "LAMP2",
-    "segundas": "LAMP2", "segundos": "LAMP2",
-    "dois": "LAMP2", "duas": "LAMP2", "2": "LAMP2",
+    "segundas": "LAMP2",
+    # "segundos" (plural) fica de fora: é a unidade de tempo de
+    # "liga a primeira por dois segundos", não uma lâmpada.
 
     "terceira": "LAMP3", "terceiro": "LAMP3",
     "terceiras": "LAMP3", "terceiros": "LAMP3",
+}
+
+# Cardinais contam como lâmpada só logo a seguir a uma destas palavras:
+# "acende a luz número dois", "liga a lâmpada 3". Sozinhos seriam
+# "bota uma música" ou "liga a primeira por dois segundos".
+CARDINAIS = {
+    "um": "LAMP1", "uma": "LAMP1", "1": "LAMP1",
+    "dois": "LAMP2", "duas": "LAMP2", "2": "LAMP2",
     "tres": "LAMP3", "3": "LAMP3",
 }
+
+MARCADORES_CARDINAL = {"lampada", "lampadas", "luz", "luzes", "numero"}
 
 TODAS_AS_LAMPADAS = ("LAMP1", "LAMP2", "LAMP3")
 
@@ -98,7 +147,7 @@ SEPARADOR_CLAUSULAS = re.compile(
 
 
 # =========================================================
-# NORMALIZAÇÃO E TOLERÂNCIA
+# NORMALIZAÇÃO
 # =========================================================
 
 def normalizar_palavras(texto):
@@ -124,58 +173,10 @@ def normalizar_palavras(texto):
     ]
 
 
-def distancia_edicao(a, b):
-    """Distância de Levenshtein entre duas palavras."""
-
-    if a == b:
-        return 0
-
-    if abs(len(a) - len(b)) > 2:
-        return 3
-
-    anterior = list(range(len(b) + 1))
-
-    for i, letra_a in enumerate(a, 1):
-
-        atual = [i]
-
-        for j, letra_b in enumerate(b, 1):
-            atual.append(
-                min(
-                    anterior[j] + 1,
-                    atual[j - 1] + 1,
-                    anterior[j - 1] + (letra_a != letra_b)
-                )
-            )
-
-        anterior = atual
-
-    return anterior[len(b)]
-
-
 def pertence(palavra, conjunto):
-    """
-    Igualdade exacta ou, para palavras longas, erro de transcrição na
-    ordem de uma letra ("ascende" → "acende", "ligue" → "liga").
+    """Igualdade exacta. Sem tolerância por distância de edição."""
 
-    Palavras curtas exigem igualdade exacta: a tolerância em "liga",
-    "por" ou "nao" criaria falsos positivos.
-    """
-
-    if palavra in conjunto:
-        return True
-
-    if len(palavra) >= 8:
-        limite = 2
-    elif len(palavra) >= 5:
-        limite = 1
-    else:
-        return False
-
-    return any(
-        distancia_edicao(palavra, candidata) <= limite
-        for candidata in conjunto
-    )
+    return palavra in conjunto
 
 
 def _detetar(palavras, conjunto):
@@ -191,8 +192,15 @@ def _detetar_alvos(palavras):
 
     alvos = []
 
-    for palavra in palavras:
-        alvo = NUMEROS.get(palavra)
+    for indice, palavra in enumerate(palavras):
+
+        alvo = ORDINAIS.get(palavra)
+
+        if alvo is None and palavra in CARDINAIS:
+            anterior = palavras[indice - 1] if indice else None
+
+            if anterior in MARCADORES_CARDINAL:
+                alvo = CARDINAIS[palavra]
 
         if alvo and alvo not in alvos:
             alvos.append(alvo)
@@ -216,20 +224,97 @@ def _detetar_acao(palavras):
 # PLANEAMENTO
 # =========================================================
 
+def _e_confirmacao_inicial(palavras):
+    """'está bem', 'sim', 'ok' — confirmação, não pergunta."""
+
+    if not palavras:
+        return False
+
+    if palavras[0] in {"sim", "ok", "okay", "ya"}:
+        return True
+
+    return " ".join(palavras[:2]) in CONFIRMACOES_INICIAIS
+
+
 def _e_pergunta(texto, palavras):
     """
     Distingue "está tudo ligado?" de "liga tudo".
 
     Sem isto, uma pergunta sobre o estado executava o comando contrário.
+
+    Só é pergunta quando não há verbo no imperativo nem no infinitivo:
+    "podes ligar a primeira?" e "consegues desligar tudo?" são pedidos
+    educados e executam; "está tudo ligado?" só tem particípio e é
+    pergunta.
     """
+
+    if not palavras:
+        return False
+
+    if _detetar(palavras, VERBOS_ORDEM):
+        return False
+
+    if _e_confirmacao_inicial(palavras):
+        return False
 
     if "?" in texto:
         return True
 
-    if palavras and palavras[0] in PALAVRAS_PERGUNTA:
+    if palavras[0] in PALAVRAS_PERGUNTA:
         return True
 
     return "estado" in palavras
+
+
+def _apenas_alvos(item):
+    """Cláusula que só nomeia lâmpadas ("a segunda", "e a terceira")."""
+
+    return (
+        bool(item["alvos"])
+        and item["acao"] is None
+        and not item["negacao"]
+        and not item["todas"]
+        and not item["exclusao"]
+    )
+
+
+def _deduplicar(comandos):
+    """Remove repetidos e o que já está implícito em ALL_ON/ALL_OFF."""
+
+    unicos = []
+
+    for comando in comandos:
+        if comando not in unicos:
+            unicos.append(comando)
+
+    for todos in ("ALL_ON", "ALL_OFF"):
+        if todos in unicos:
+            acao = todos.split("_")[-1]
+
+            unicos = [
+                comando
+                for comando in unicos
+                if comando == todos or not comando.endswith(f"_{acao}")
+            ]
+
+    return unicos
+
+
+def _ha_contradicao(comandos):
+    """'liga a primeira e desliga a primeira' — não adivinhar."""
+
+    por_alvo = {}
+
+    for comando in comandos:
+        alvo, acao = comando.rsplit("_", 1)
+        anterior = por_alvo.get(alvo)
+
+        if anterior and anterior != acao:
+            return True
+
+        por_alvo[alvo] = acao
+
+    return False
 
 
 def planear_comandos(texto):
@@ -260,17 +345,29 @@ def planear_comandos(texto):
         resultado["pergunta"] = True
         return resultado
 
-    clausulas = [
-        clausula
-        for clausula in SEPARADOR_CLAUSULAS.split(texto)
-        if clausula and clausula.strip()
-    ]
+    # Uma cláusula que começa por palavra de exclusão pertence à
+    # anterior: "liga todas, menos a primeira".
+    clausulas = []
+
+    for bruta in SEPARADOR_CLAUSULAS.split(texto):
+
+        if not bruta or not bruta.strip():
+            continue
+
+        palavras = normalizar_palavras(bruta)
+
+        if not palavras:
+            continue
+
+        if clausulas and palavras[0] in EXCLUSOES:
+            clausulas[-1] = f"{clausulas[-1]} {bruta.strip()}"
+        else:
+            clausulas.append(bruta.strip())
 
     if not clausulas:
         return resultado
 
-    acao_anterior = None
-    acoes_sem_alvo = []
+    processadas = []
 
     for clausula in clausulas:
 
@@ -279,37 +376,63 @@ def planear_comandos(texto):
         if not palavras:
             continue
 
-        negacao = _detetar(palavras, NEGACOES)
-        acao = _detetar_acao(palavras)
-        alvos = _detetar_alvos(palavras)
-        # Correspondência exacta: a tolerância faria "lâmpada" (singular)
-        # passar por "lâmpadas" (todas).
-        todas = any(palavra in ALVOS_TODOS for palavra in palavras)
-        exclusao = _detetar(palavras, EXCLUSOES)
+        processadas.append({
+            "palavras": palavras,
+            "negacao": _detetar(palavras, NEGACOES),
+            "acao": _detetar_acao(palavras),
+            "alvos": _detetar_alvos(palavras),
+            # Correspondência exacta: a tolerância faria "lâmpada"
+            # (singular) passar por "lâmpadas" (todas).
+            "todas": any(palavra in ALVOS_TODOS for palavra in palavras),
+            "exclusao": _detetar(palavras, EXCLUSOES),
+        })
+
+    acao_anterior = None
+    acoes_sem_alvo = []
+    indice = 0
+
+    while indice < len(processadas):
+
+        item = processadas[indice]
+        indice += 1
 
         # "não ligues a primeira" — não adivinhar o que ele quer.
-        if negacao and acao:
+        if item["negacao"] and item["acao"]:
             resultado["ambiguo"] = True
             continue
 
         # "não sei", "mas não" — a cláusula não pede nada.
-        if negacao:
+        if item["negacao"]:
             continue
 
-        if acao:
-            acao_anterior = acao
+        if item["acao"]:
+            acao_anterior = item["acao"]
 
         # "desliga todas menos a primeira" → as outras duas.
-        if acao and todas:
+        if item["acao"] and item["todas"]:
 
-            if not exclusao:
-                resultado["comandos"].append(f"ALL_{acao}")
+            if not item["exclusao"]:
+                resultado["comandos"].append(f"ALL_{item['acao']}")
                 continue
+
+            excluidos = list(item["alvos"])
+
+            # "desliga todas menos a primeira e a segunda": as cláusulas
+            # seguintes que só nomeiam lâmpadas alargam a exclusão em vez
+            # de herdar a acção.
+            while indice < len(processadas) and _apenas_alvos(
+                processadas[indice]
+            ):
+                for alvo in processadas[indice]["alvos"]:
+                    if alvo not in excluidos:
+                        excluidos.append(alvo)
+
+                indice += 1
 
             restantes = [
                 lampada
                 for lampada in TODAS_AS_LAMPADAS
-                if lampada not in alvos
+                if lampada not in excluidos
             ]
 
             if not restantes:
@@ -317,28 +440,28 @@ def planear_comandos(texto):
                 continue
 
             for lampada in restantes:
-                resultado["comandos"].append(f"{lampada}_{acao}")
+                resultado["comandos"].append(f"{lampada}_{item['acao']}")
 
             continue
 
-        if alvos:
+        if item["alvos"]:
 
-            acao_a_usar = acao or acao_anterior
+            acao_a_usar = item["acao"] or acao_anterior
 
             if acao_a_usar is None:
                 # Lâmpada sem acção: pode ser resposta à pergunta anterior.
-                for alvo in alvos:
+                for alvo in item["alvos"]:
                     if alvo not in resultado["alvos"]:
                         resultado["alvos"].append(alvo)
                 continue
 
-            for alvo in alvos:
+            for alvo in item["alvos"]:
                 resultado["comandos"].append(f"{alvo}_{acao_a_usar}")
 
             continue
 
-        if acao:
-            acoes_sem_alvo.append(acao)
+        if item["acao"]:
+            acoes_sem_alvo.append(item["acao"])
 
     # Acção sem lâmpada: perguntar qual.
     if acoes_sem_alvo:
@@ -357,6 +480,11 @@ def planear_comandos(texto):
 
         else:
             resultado["pendente"] = acoes_sem_alvo[-1]
+
+    resultado["comandos"] = _deduplicar(resultado["comandos"])
+
+    if _ha_contradicao(resultado["comandos"]):
+        resultado["ambiguo"] = True
 
     # Ambiguidade nunca convive com comandos: quem chama não pode
     # executar metade da frase por engano.
