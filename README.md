@@ -59,13 +59,22 @@ Abre em <http://127.0.0.1:5000>. A rota `/` redirecciona para `/cadastro`.
 | `/api/lampadas` | POST | Liga/desliga lâmpadas pelo Arduino |
 | `/api/logout` | POST | Termina a sessão |
 
+## Testes
+
+Os comandos de voz têm uma bateria própria, sem servidor nem base de dados:
+
+```bash
+python testes/teste_comandos.py
+```
+
 ## Estrutura
 
 ```
 app.py                  rotas Flask e lógica de sessão
 banco/                  conexão MySQL e embeddings faciais
 reconhecimento/         deteção (YuNet) e reconhecimento (SFace)
-assistente/             Maiia: transcrição, LLM (Groq) e voz (edge-tts)
+assistente/             Maiia: comandos, transcrição, LLM (Groq) e voz (edge-tts)
+testes/                 testes dos comandos de voz
 dispositivos/           Arduino por série (LAMP1_ON … ALL_OFF)
 camera/                 captura pela webcam
 modelos/                modelos ONNX do OpenCV
