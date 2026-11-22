@@ -1,7 +1,7 @@
 # SmartAccess / Maiia — dependências
 # Instalar:  pip install -r requirements.txt
 
-Flask>=3.0,<4
+Flask[async]>=3.0,<4      # [async] = asgiref; as rotas /api/maiia/* são async
 Werkzeug>=3.0,<4
 python-dotenv>=1.0
 mysql-connector-python>=8.3
