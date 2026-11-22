@@ -1,12 +1,17 @@
 
 import re
-import unicodedata
 from pathlib import Path
 from uuid import uuid4
 
 from assistente.ouvir import transcrever_audio
 from assistente.conversar import gerar_resposta
 from assistente.falar import gerar_audio
+from assistente.comandos import (
+    normalizar_palavras,
+    planear_comandos,
+    CONFIRMACOES,
+    CANCELAMENTOS,
+)
 
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -74,141 +79,95 @@ async def cumprimentar(nome=None, conhecido=False):
     }
 
 
-def normalizar_palavras(texto):
-    texto = texto.lower().strip()
-    texto = unicodedata.normalize("NFD", texto)
-
-    texto = "".join(
-        caractere
-        for caractere in texto
-        if unicodedata.category(caractere) != "Mn"
-    )
-
-    texto = re.sub(r"[^\w\s]", " ", texto)
-
-    palavras = texto.split()
-
-    return [
-        palavra
-        for palavra in palavras
-        if palavra not in {"maia", "maiia"}
-    ]
+# A interpretação das frases vive em assistente/comandos.py:
+# normalizar_palavras, identificar_acao_lampada, identificar_alvo_lampada,
+# identificar_comando_lampada e planear_comandos.
 
 
-def identificar_acao_lampada(texto):
-    palavras = normalizar_palavras(texto)
+SEM_CONTROLO = (
+    "Não consigo controlar as lâmpadas neste momento."
+)
 
-    if any(
-        palavra in {"nao", "nunca", "jamais"}
-        for palavra in palavras
-    ):
-        return None
+FALHA_LIGACAO = (
+    "Não consegui comunicar com o Arduino. "
+    "Verifica a ligação."
+)
 
-    ligar = {
-        "liga", "ligar", "acende", "acender",
-        "ativa", "ativar"
-    }
+FALHA_EXECUCAO = (
+    "Ocorreu um erro ao tentar controlar as lâmpadas."
+)
 
-    desligar = {
-        "desliga", "desligar", "apaga", "apagar",
-        "desativa", "desativar"
-    }
+MENSAGENS_FALHA = {SEM_CONTROLO, FALHA_LIGACAO, FALHA_EXECUCAO}
 
-    encontrou_ligar = any(p in ligar for p in palavras)
-    encontrou_desligar = any(p in desligar for p in palavras)
+RESPOSTAS_COMANDO = {
+    "LAMP1_ON": "A primeira lâmpada está ligada.",
+    "LAMP1_OFF": "A primeira lâmpada está desligada.",
+    "LAMP2_ON": "A segunda lâmpada está ligada.",
+    "LAMP2_OFF": "A segunda lâmpada está desligada.",
+    "LAMP3_ON": "A terceira lâmpada está ligada.",
+    "LAMP3_OFF": "A terceira lâmpada está desligada.",
+    "ALL_ON": "Todas as lâmpadas estão ligadas.",
+    "ALL_OFF": "Todas as lâmpadas estão desligadas.",
+}
 
-    if encontrou_ligar == encontrou_desligar:
-        return None
-
-    return "ON" if encontrou_ligar else "OFF"
-
-
-def identificar_alvo_lampada(texto):
-    palavras = normalizar_palavras(texto)
-
-    if any(
-        palavra in {"todas", "todos", "tudo", "luzes"}
-        for palavra in palavras
-    ):
-        return "ALL"
-
-    numeros = {
-        "primeira": "LAMP1",
-        "primeiro": "LAMP1",
-        "um": "LAMP1",
-        "uma": "LAMP1",
-        "1": "LAMP1",
-
-        "segunda": "LAMP2",
-        "segundo": "LAMP2",
-        "dois": "LAMP2",
-        "duas": "LAMP2",
-        "2": "LAMP2",
-
-        "terceira": "LAMP3",
-        "terceiro": "LAMP3",
-        "tres": "LAMP3",
-        "3": "LAMP3"
-    }
-
-    for palavra in palavras:
-        if palavra in numeros:
-            return numeros[palavra]
-
-    return None
 
 def executar_comando_lampada(comando, executar_comando):
     """Executa o comando e valida a confirmação do Arduino."""
 
-    respostas = {
-        "LAMP1_ON": "A primeira lâmpada está ligada.",
-        "LAMP1_OFF": "A primeira lâmpada está desligada.",
-        "LAMP2_ON": "A segunda lâmpada está ligada.",
-        "LAMP2_OFF": "A segunda lâmpada está desligada.",
-        "LAMP3_ON": "A terceira lâmpada está ligada.",
-        "LAMP3_OFF": "A terceira lâmpada está desligada.",
-        "ALL_ON": "Todas as lâmpadas estão ligadas.",
-        "ALL_OFF": "Todas as lâmpadas estão desligadas."
-    }
-
     if executar_comando is None:
-        return "Não consigo controlar as lâmpadas neste momento."
+        return SEM_CONTROLO
 
     try:
         executar_comando(comando)
 
-        return respostas[comando]
+        return RESPOSTAS_COMANDO[comando]
 
     except (ConnectionError, TimeoutError, OSError) as erro:
         print(f"Erro de comunicação com Arduino: {erro}")
 
+        return FALHA_LIGACAO
+
+    except Exception as erro:
+        print(f"Erro ao executar comando: {erro}")
+
+        return FALHA_EXECUCAO
+
+
+def executar_comandos(comandos, executar_comando):
+    """
+    Executa uma lista de comandos e agrega o resultado sem perder nenhum.
+
+    Se alguns comandos falharem, a resposta diz o que foi feito e o que
+    não foi — nunca apresenta como concluído o que não foi confirmado.
+    """
+
+    respostas = []
+    falhas = 0
+
+    for comando in comandos:
+
+        mensagem = executar_comando_lampada(comando, executar_comando)
+
+        if mensagem in MENSAGENS_FALHA:
+            falhas += 1
+        else:
+            respostas.append(mensagem)
+
+    if not respostas:
         return (
             "Não consegui comunicar com o Arduino. "
             "Verifica a ligação."
         )
 
-    except Exception as erro:
-        print(f"Erro ao executar comando: {erro}")
+    texto = " ".join(respostas)
 
-        return (
-            "Ocorreu um erro ao tentar controlar as lâmpadas."
+    if falhas:
+        texto += (
+            " Quanto ao resto, não consegui confirmar com o Arduino."
         )
 
-def identificar_comando_lampada(texto):
-    acao = identificar_acao_lampada(texto)
+    return texto
 
-    if not acao:
-        return None
-
-    alvo = identificar_alvo_lampada(texto)
-
-    if not alvo:
-        return None
-
-    if alvo == "ALL":
-        return f"ALL_{acao}"
-
-    return f"{alvo}_{acao}"
 
 
 async def processar_audio(
@@ -239,94 +198,75 @@ async def processar_audio(
 
     pendente = comando_pendente
 
-    # 3. Verificar se o utilizador deu um comando completo
-    comando = identificar_comando_lampada(texto_usuario)
+    # 3. Interpretar a frase (determinístico; o LLM nunca executa nada)
+    plano = planear_comandos(texto_usuario)
 
-    print("[MAIIA] Comando identificado:", repr(comando))
+    print("[MAIIA] Plano:", plano)
 
-    if comando:
-        resposta = executar_comando_lampada(
-            comando,
-            executar_comando
-        )
+    palavras = set(normalizar_palavras(texto_usuario))
 
+    confirmou = bool(palavras & CONFIRMACOES)
+    cancelou = bool(palavras & CANCELAMENTOS) or "nao" in palavras
+
+    # 4. Pergunta sobre o estado: responder, nunca executar
+    if plano["pergunta"]:
+        resposta = gerar_resposta(mensagens)
         pendente = None
 
-    # 4. Verificar se existe um comando à espera de confirmação
-    elif pendente:
-
-        palavras = set(normalizar_palavras(texto_usuario))
-
-        cancelamentos = {
-            "nao",
-            "cancela",
-            "cancelar",
-            "desiste",
-            "desistir",
-            "esquece",
-            "esquecer",
-            "nenhuma"
-        }
-
-        if palavras.intersection(cancelamentos):
-            resposta = "Está bem. Cancelei o comando."
-            pendente = None
-
-        else:
-            alvo = identificar_alvo_lampada(texto_usuario)
-
-            print("[MAIIA] Alvo identificado:", repr(alvo))
-
-            if alvo:
-                if alvo == "ALL":
-                    comando = f"ALL_{pendente}"
-                else:
-                    comando = f"{alvo}_{pendente}"
-
-                print("[MAIIA] Comando enviado:", repr(comando))
-
-                resposta = executar_comando_lampada(
-                    comando,
-                    executar_comando
-                )
-
-                pendente = None
-
-            else:
-                nova_acao = identificar_acao_lampada(texto_usuario)
-
-                if nova_acao:
-                    pendente = nova_acao
-
-                    resposta = (
-                        "Compreendi a nova ação. "
-                        "Qual lâmpada pretendes controlar? "
-                        "Primeira, segunda, terceira ou todas?"
-                    )
-                else:
-                    resposta = (
-                        "Não consegui identificar a lâmpada. "
-                        "Diz primeira, segunda, terceira ou todas. "
-                        "Também podes dizer cancela."
-                    )
-
-    # 5. Verificar se foi dada uma ação sem indicar a lâmpada
-    elif identificar_acao_lampada(texto_usuario):
-
-        pendente = identificar_acao_lampada(texto_usuario)
-
-        acao_texto = (
-            "ligar"
-            if pendente == "ON"
-            else "desligar"
+    # 5. Frase contraditória: não adivinhar
+    elif plano["ambiguo"]:
+        resposta = (
+            "Fiquei com dúvidas no que pediste. "
+            "Diz de outra forma, por favor."
         )
+        pendente = None
+
+    # 6. Comando completo: uma lâmpada, várias, ou todas
+    elif plano["comandos"]:
+        resposta = executar_comandos(
+            plano["comandos"],
+            executar_comando
+        )
+        pendente = None
+
+    # 7. Resposta à pergunta anterior da Maiia ("a segunda")
+    elif pendente and plano["alvos"]:
+        resposta = executar_comandos(
+            [f"{alvo}_{pendente}" for alvo in plano["alvos"]],
+            executar_comando
+        )
+        pendente = None
+
+    # 8. Cancelamento explícito
+    elif pendente and cancelou:
+        resposta = "Está bem. Cancelei o comando."
+        pendente = None
+
+    # 9. Havia um comando à espera: repetir a pergunta em vez de dar erro
+    elif pendente:
+        if plano["pendente"]:
+            pendente = plano["pendente"]
+
+        acao_texto = "ligar" if pendente == "ON" else "desligar"
+
+        resposta = (
+            "Ainda não sei qual é a lâmpada. "
+            f"Diz primeira, segunda, terceira ou todas, "
+            f"para eu {acao_texto}."
+        )
+
+    # 10. Acção sem lâmpada
+    elif plano["pendente"]:
+        pendente = plano["pendente"]
+
+        acao_texto = "ligar" if pendente == "ON" else "desligar"
 
         resposta = (
             f"Qual lâmpada queres {acao_texto}? "
             "Primeira, segunda, terceira ou todas?"
         )
 
-    # 6. Conversa normal com a inteligência artificial
+    # 11. Conversa normal com a inteligência artificial
     else:
         resposta = gerar_resposta(mensagens)
 
