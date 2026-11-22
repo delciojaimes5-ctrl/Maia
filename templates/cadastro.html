@@ -1,0 +1,194 @@
+
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SmartAccess | Cadastro</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f1f3f5;
+            margin: 0;
+            padding: 30px 15px;
+            color: #212529;
+        }
+
+        .container {
+            background: white;
+            max-width: 450px;
+            margin: 40px auto;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        h1 {
+            text-align: center;
+            color: #1565c0;
+        }
+
+        .descricao {
+            text-align: center;
+            color: #6c757d;
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 6px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+
+        button {
+            width: 100%;
+            padding: 13px;
+            margin-top: 25px;
+            border: none;
+            background: #1565c0;
+            color: white;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0d47a1;
+        }
+
+        .mensagem {
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .erro {
+            background: #f8d7da;
+            color: #842029;
+        }
+
+        .sucesso {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .link {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        a {
+            color: #1565c0;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+
+        <h1>SmartAccess</h1>
+
+        <p class="descricao">
+            Criar uma nova conta
+        </p>
+
+        {% if erro %}
+            <div class="mensagem erro">
+                {{ erro }}
+            </div>
+        {% endif %}
+
+        {% if sucesso %}
+            <div class="mensagem sucesso">
+                {{ sucesso }}
+            </div>
+        {% endif %}
+
+        <form action="{{ url_for('cadastro') }}" method="POST">
+
+            <label for="nome">Nome completo</label>
+            <input
+                type="text"
+                id="nome"
+                name="nome"
+                maxlength="120"
+                autocomplete="name"
+                required
+            >
+
+            <label for="username">Username</label>
+            <input
+                type="text"
+                id="username"
+                name="username"
+                maxlength="50"
+                autocomplete="username"
+                required
+            >
+
+            <label for="email">Email</label>
+            <input
+                type="email"
+                id="email"
+                name="email"
+                maxlength="150"
+                autocomplete="email"
+                required
+            >
+
+            <label for="password">Palavra-passe</label>
+            <input
+                type="password"
+                id="password"
+                name="password"
+                minlength="8"
+                autocomplete="new-password"
+                required
+            >
+
+            <label for="confirmar_password">
+                Confirmar palavra-passe
+            </label>
+
+            <input
+                type="password"
+                id="confirmar_password"
+                name="confirmar_password"
+                minlength="8"
+                autocomplete="new-password"
+                required
+            >
+
+            <button type="submit">
+                Criar conta
+            </button>
+
+        </form>
+
+        <div class="link">
+            Já tens uma conta?
+            <a href="/login">Iniciar sessão</a>
+        </div>
+
+    </div>
+
+</body>
+</html>

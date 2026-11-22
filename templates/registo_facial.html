@@ -1,0 +1,257 @@
+
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SmartAccess | Registo Facial</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f1f3f5;
+            margin: 0;
+            padding: 30px 15px;
+            color: #212529;
+        }
+
+        .container {
+            background: white;
+            max-width: 550px;
+            margin: 30px auto;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,.08);
+        }
+
+        h1 {
+            text-align: center;
+            color: #1565c0;
+        }
+
+        p {
+            text-align: center;
+            color: #6c757d;
+        }
+
+        video {
+            width: 100%;
+            border-radius: 10px;
+            background: #212529;
+            margin-top: 15px;
+        }
+
+        .consentimento {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-top: 20px;
+            line-height: 1.5;
+        }
+
+        .consentimento input {
+            margin-top: 4px;
+        }
+
+        button {
+            width: 100%;
+            padding: 13px;
+            margin-top: 20px;
+            border: none;
+            background: #1565c0;
+            color: white;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background: #adb5bd;
+            cursor: not-allowed;
+        }
+
+        #mensagem {
+            margin-top: 15px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>SmartAccess</h1>
+
+    <p>Registo facial de {{ nome }}</p>
+
+    <p>
+        Posiciona o teu rosto em frente à câmara.
+    </p>
+
+    <video id="camera" autoplay playsinline></video>
+
+    <canvas id="canvas" hidden></canvas>
+
+    <div class="consentimento">
+        <input
+            type="checkbox"
+            id="consentimento"
+        >
+
+        <label for="consentimento">
+            Autorizo expressamente o tratamento dos meus dados
+            biométricos para efeitos de reconhecimento facial
+            no sistema SmartAccess.
+        </label>
+    </div>
+
+    <button id="btnRegistar" disabled>
+        Registar rosto
+    </button>
+
+    <p id="mensagem"></p>
+
+</div>
+
+<script>
+
+const camera = document.getElementById("camera");
+const canvas = document.getElementById("canvas");
+
+const consentimento = document.getElementById("consentimento");
+const btnRegistar = document.getElementById("btnRegistar");
+const mensagem = document.getElementById("mensagem");
+
+let stream = null;
+
+
+// Ativar câmara
+async function iniciarCamera() {
+
+    try {
+
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: "user"
+            },
+            audio: false
+        });
+
+        camera.srcObject = stream;
+
+    } catch (erro) {
+
+        mensagem.textContent =
+            "Não foi possível aceder à câmara.";
+
+        console.error(erro);
+    }
+}
+
+
+// Ativar botão apenas depois do consentimento
+consentimento.addEventListener("change", () => {
+
+    btnRegistar.disabled = !consentimento.checked;
+
+});
+
+
+// Capturar e enviar imagem
+btnRegistar.addEventListener("click", async () => {
+
+    if (!consentimento.checked) {
+        mensagem.textContent = "Autoriza o registo biométrico.";
+        return;
+    }
+
+    if (!camera.videoWidth || !camera.videoHeight) {
+        mensagem.textContent = "A câmara ainda não está pronta.";
+        return;
+    }
+
+    btnRegistar.disabled = true;
+    mensagem.textContent = "A processar o rosto...";
+
+    canvas.width = camera.videoWidth;
+    canvas.height = camera.videoHeight;
+
+    const contexto = canvas.getContext("2d");
+
+    contexto.drawImage(
+        camera,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    canvas.toBlob(async (blob) => {
+
+        if (!blob) {
+            mensagem.textContent = "Erro ao capturar imagem.";
+            btnRegistar.disabled = false;
+            return;
+        }
+
+        const dados = new FormData();
+
+        dados.append("imagem", blob, "rosto.jpg");
+        dados.append("consentimento", "sim");
+
+        try {
+
+            const resposta = await fetch(
+                "/api/registar-rosto",
+                {
+                    method: "POST",
+                    body: dados
+                }
+            );
+
+            const resultado = await resposta.json();
+
+            mensagem.textContent = resultado.mensagem;
+
+            if (resposta.ok && resultado.sucesso) {
+
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+
+                window.location.href = resultado.redirecionar;
+
+            } else {
+
+                btnRegistar.disabled = false;
+
+            }
+
+        } catch (erro) {
+
+            mensagem.textContent =
+                "Erro de comunicação com o servidor.";
+
+            console.error(erro);
+
+            btnRegistar.disabled = false;
+
+        }
+
+    }, "image/jpeg", 0.90);
+
+});
+
+
+iniciarCamera();
+
+</script>
+
+</body>
+</html>

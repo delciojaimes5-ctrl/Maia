@@ -1,0 +1,110 @@
+
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SmartAccess | Sucesso</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f1f3f5;
+            margin: 0;
+            padding: 30px 15px;
+            color: #212529;
+        }
+
+        .container {
+            background: white;
+            max-width: 750px;
+            margin: 30px auto;
+            padding: 30px;
+            border-radius: 12px;
+        }
+
+        h1, h2 {
+            text-align: center;
+            color: #1565c0;
+        }
+
+        .sucesso {
+            text-align: center;
+            color: #198754;
+            margin-bottom: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #dee2e6;
+            text-align: left;
+        }
+
+        th {
+            background: #f1f3f5;
+        }
+
+        a {
+            display: block;
+            text-align: center;
+            margin-top: 25px;
+            color: #1565c0;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>SmartAccess</h1>
+
+    <div class="sucesso">
+        <h2>Registo concluído!</h2>
+
+        <p>
+            {{ nome }}, a tua conta e o teu rosto foram registados.
+        </p>
+    </div>
+
+    <h2>Utilizadores registados</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nome</th>
+                <th>Username</th>
+                <th>Papel</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for usuario in usuarios %}
+            <tr>
+                <td>{{ usuario.id }}</td>
+                <td>{{ usuario.nome }}</td>
+                <td>{{ usuario.username }}</td>
+                <td>{{ usuario.papel }}</td>
+                <td>{{ usuario.estado }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <a href="{{ url_for('login') }}">
+        Ir para o login facial
+    </a>
+
+</div>
+
+</body>
+</html>

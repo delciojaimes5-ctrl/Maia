@@ -1,0 +1,1045 @@
+
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SmartAccess | Controlo de Acesso</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f1f3f5;
+            margin: 0;
+            padding: 30px 15px;
+            color: #212529;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            max-width: 650px;
+            margin: auto;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            text-align: center;
+        }
+
+        h1 {
+            color: #1565c0;
+            margin-bottom: 8px;
+        }
+
+        .descricao {
+            color: #6c757d;
+            margin-bottom: 25px;
+        }
+
+        video {
+            width: 100%;
+            max-width: 500px;
+            border-radius: 10px;
+            background: #212529;
+            display: block;
+            margin: auto;
+        }
+
+        .botoes {
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 12px 20px;
+            margin: 6px;
+            border: none;
+            background: #1565c0;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        button:hover:not(:disabled) {
+            background: #0d47a1;
+        }
+
+        button:disabled {
+            background: #adb5bd;
+            cursor: not-allowed;
+        }
+
+        #resultado {
+            margin-top: 25px;
+            padding: 18px;
+            border-radius: 8px;
+            background: #f8f9fa;
+            color: #495057;
+            font-weight: bold;
+            overflow-wrap: anywhere;
+        }
+
+        #resultado.sucesso {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        #resultado.erro {
+            background: #f8d7da;
+            color: #842029;
+        }
+
+        #resultado.aviso {
+            background: #fff3cd;
+            color: #664d03;
+        }
+
+        .dados-usuario {
+            margin-top: 15px;
+            text-align: left;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .dados-usuario p {
+            margin: 8px 0;
+        }
+
+        .estado {
+            margin-top: 15px;
+            color: #6c757d;
+            font-size: 13px;
+        }
+
+        .secao-maiia {
+            margin-top: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .secao-maiia h2 {
+            color: #1565c0;
+            margin-top: 0;
+        }
+
+        .secao-maiia p {
+            color: #6c757d;
+            font-size: 14px;
+        }
+
+        #estadoMaiia {
+            margin-top: 12px;
+            font-size: 14px;
+            color: #495057;
+        }
+
+        #conversa {
+            margin-top: 15px;
+            text-align: left;
+            overflow-wrap: anywhere;
+        }
+
+        #conversa p {
+            padding: 12px;
+            border-radius: 8px;
+            background: white;
+            color: #212529;
+            line-height: 1.5;
+            border: 1px solid #e9ecef;
+            margin-bottom: 10px;
+        }
+
+        #audioMaiia {
+            display: none;
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        canvas {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>SmartAccess</h1>
+
+    <p class="descricao">
+        Sistema inteligente de controlo de acesso
+    </p>
+
+    <video id="camera" autoplay playsinline muted></video>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="botoes">
+
+        <button id="iniciar">
+            Iniciar câmara
+        </button>
+
+        <button id="analisar" disabled>
+            Analisar agora
+        </button>
+
+        <button id="parar" disabled>
+            Parar câmara
+        </button>
+
+    </div>
+
+    <div id="resultado">
+        Aguardando início da câmara...
+    </div>
+
+    <div id="dadosUsuario" class="dados-usuario">
+
+        <h3>Informações do utilizador</h3>
+
+        <p>
+            <strong>Nome:</strong>
+            <span id="nome"></span>
+        </p>
+
+        <p>
+            <strong>Username:</strong>
+            <span id="username"></span>
+        </p>
+
+        <p>
+            <strong>Tipo de conta:</strong>
+            <span id="papel"></span>
+        </p>
+
+        <p>
+            <strong>Estado:</strong>
+            <span id="estado"></span>
+        </p>
+
+        <p>
+            <strong>Similaridade:</strong>
+            <span id="similaridade"></span>
+        </p>
+
+    </div>
+
+    <div class="secao-maiia">
+
+        <h2>Maiia</h2>
+
+        <p>
+            Assistente inteligente do SmartAccess.
+            Podes conversar comigo através da tua voz.
+        </p>
+
+        <button id="falar" disabled>
+            Falar com Maiia
+        </button>
+
+        <div id="estadoMaiia">
+            Aguardando autenticação facial.
+        </div>
+
+        <div id="conversa"></div>
+
+        <audio id="audioMaiia" controls></audio>
+
+    </div>
+
+    <p class="estado" id="estadoCamera">
+        Câmara desligada.
+    </p>
+
+</div>
+
+
+<script>
+
+    // =====================================================
+    // ELEMENTOS HTML
+    // =====================================================
+
+    const video = document.getElementById("camera");
+    const canvas = document.getElementById("canvas");
+
+    const resultado = document.getElementById("resultado");
+    const estadoCamera = document.getElementById("estadoCamera");
+    const estadoMaiia = document.getElementById("estadoMaiia");
+
+    const iniciar = document.getElementById("iniciar");
+    const analisar = document.getElementById("analisar");
+    const parar = document.getElementById("parar");
+    const falar = document.getElementById("falar");
+
+    const dadosUsuario = document.getElementById("dadosUsuario");
+    const conversa = document.getElementById("conversa");
+    const audioMaiia = document.getElementById("audioMaiia");
+
+
+    // =====================================================
+    // VARIÁVEIS
+    // =====================================================
+
+    let stream = null;
+    let intervaloReconhecimento = null;
+
+    let analiseEmCurso = false;
+
+    let ultimaIdentidade = null;
+    let ultimoMomentoSemRosto = null;
+
+    let audioStream = null;
+    let gravador = null;
+    let partesAudio = [];
+
+    let autenticado = false;
+
+    // Indica que a gravação deve ser descartada (câmara desligada).
+    let cancelarGravacao = false;
+
+    // Indica que a Maiia está a processar ou a falar:
+    // o botão "Falar com Maiia" fica desactivado.
+    let ocupado = false;
+
+    const INTERVALO_RECONHECIMENTO = 2000;
+    const TEMPO_RESET_IDENTIDADE = 5000;
+
+
+    // =====================================================
+    // FUNÇÕES AUXILIARES
+    // =====================================================
+
+    function mostrarResultado(mensagem, classe = "") {
+
+        resultado.textContent = mensagem;
+        resultado.className = classe;
+
+    }
+
+
+    function mostrarEstadoMaiia(mensagem) {
+
+        estadoMaiia.textContent = mensagem;
+
+    }
+
+
+    function limparDadosUsuario() {
+
+        dadosUsuario.style.display = "none";
+
+        document.getElementById("nome").textContent = "";
+        document.getElementById("username").textContent = "";
+        document.getElementById("papel").textContent = "";
+        document.getElementById("estado").textContent = "";
+        document.getElementById("similaridade").textContent = "";
+
+    }
+
+
+    function mostrarDadosUsuario(usuario, similaridade) {
+
+        document.getElementById("nome").textContent = usuario.nome;
+        document.getElementById("username").textContent = usuario.username;
+        document.getElementById("papel").textContent = usuario.papel;
+        document.getElementById("estado").textContent = usuario.estado;
+
+        document.getElementById("similaridade").textContent =
+            (similaridade * 100).toFixed(2) + "%";
+
+        dadosUsuario.style.display = "block";
+
+    }
+
+
+    // =====================================================
+    // REPRODUZIR ÁUDIO DA MAIIA
+    // =====================================================
+
+    async function reproduzirAudio(url) {
+
+        audioMaiia.pause();
+
+        audioMaiia.src = url;
+        audioMaiia.style.display = "block";
+
+        mostrarEstadoMaiia("Maiia está a falar...");
+
+        return new Promise((resolve, reject) => {
+
+            audioMaiia.onended = () => {
+
+                mostrarEstadoMaiia(
+                    "Resposta concluída. Podes falar novamente."
+                );
+
+                resolve();
+
+            };
+
+            audioMaiia.onerror = () => {
+
+                reject(
+                    new Error("Não foi possível reproduzir o áudio.")
+                );
+
+            };
+
+            audioMaiia.play().catch(() => {
+
+                mostrarEstadoMaiia(
+                    "Carrega no botão de reprodução para ouvir a Maiia."
+                );
+
+            });
+
+        });
+
+    }
+
+
+    // =====================================================
+    // CUMPRIMENTO AUTOMÁTICO
+    // =====================================================
+
+    async function cumprimentarMaiia() {
+
+        ocupado = true;
+        falar.disabled = true;
+
+        try {
+
+            mostrarEstadoMaiia("Maiia está a preparar o cumprimento...");
+
+            const resposta = await fetch("/api/maiia/cumprimentar", {
+                method: "POST"
+            });
+
+            const dados = await resposta.json();
+
+            if (!resposta.ok) {
+
+                throw new Error(
+                    dados.erro || "Não foi possível gerar o cumprimento."
+                );
+
+            }
+
+            mostrarEstadoMaiia(dados.mensagem);
+
+            await reproduzirAudio(dados.audio_url);
+
+        } catch (erro) {
+
+            mostrarEstadoMaiia(erro.message);
+
+        } finally {
+
+            ocupado = false;
+            falar.disabled = !autenticado;
+
+        }
+
+    }
+
+
+    // =====================================================
+    // IDENTIFICAR MUDANÇA DE IDENTIDADE
+    // =====================================================
+
+    async function verificarCumprimento(chaveIdentidade) {
+
+        if (ultimaIdentidade === chaveIdentidade) {
+            return;
+        }
+
+        ultimaIdentidade = chaveIdentidade;
+
+        await cumprimentarMaiia();
+
+    }
+
+
+    // =====================================================
+    // ANALISAR IMAGEM
+    // =====================================================
+
+    async function analisarRosto() {
+
+        if (analiseEmCurso || !stream) {
+            return;
+        }
+
+        if (!video.videoWidth || !video.videoHeight) {
+            return;
+        }
+
+        analiseEmCurso = true;
+
+        try {
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            const contexto = canvas.getContext("2d");
+
+            contexto.drawImage(
+                video,
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+
+            const blob = await new Promise(resolve => {
+                canvas.toBlob(resolve, "image/jpeg", 0.85);
+            });
+
+            if (!blob) {
+                throw new Error("Não foi possível capturar a imagem.");
+            }
+
+            const dados = new FormData();
+
+            dados.append("imagem", blob, "captura.jpg");
+
+            const resposta = await fetch("/api/analisar", {
+                method: "POST",
+                body: dados
+            });
+
+            const dadosResposta = await resposta.json();
+
+            if (!resposta.ok) {
+
+                throw new Error(
+                    dadosResposta.erro ||
+                    dadosResposta.mensagem ||
+                    "Erro durante o reconhecimento."
+                );
+
+            }
+
+
+            // ---------------------------------------------
+            // NENHUM ROSTO
+            // ---------------------------------------------
+
+            if (dadosResposta.situacao === "sem_rosto") {
+
+                autenticado = false;
+                falar.disabled = true;
+
+                limparDadosUsuario();
+
+                mostrarResultado(
+                    "Nenhum rosto detetado. Posiciona-te diante da câmara."
+                );
+
+                mostrarEstadoMaiia(
+                    "Aguardando uma pessoa."
+                );
+
+                if (ultimoMomentoSemRosto === null) {
+
+                    ultimoMomentoSemRosto = Date.now();
+
+                }
+
+                if (
+                    Date.now() - ultimoMomentoSemRosto >
+                    TEMPO_RESET_IDENTIDADE
+                ) {
+
+                    ultimaIdentidade = null;
+
+                }
+
+                return;
+
+            }
+
+
+            // ---------------------------------------------
+            // VÁRIOS ROSTOS
+            // ---------------------------------------------
+
+            if (dadosResposta.situacao === "multiplos_rostos") {
+
+                autenticado = false;
+                falar.disabled = true;
+
+                limparDadosUsuario();
+
+                mostrarResultado(
+                    "Foram detetados vários rostos. Deixa apenas uma pessoa diante da câmara.",
+                    "aviso"
+                );
+
+                mostrarEstadoMaiia(
+                    "Aguardando uma única pessoa."
+                );
+
+                ultimoMomentoSemRosto = null;
+
+                return;
+
+            }
+
+
+            // ---------------------------------------------
+            // PESSOA DESCONHECIDA
+            // ---------------------------------------------
+
+            if (!dadosResposta.identificado) {
+
+                autenticado = false;
+                falar.disabled = true;
+
+                limparDadosUsuario();
+
+                mostrarResultado(
+                    dadosResposta.mensagem || "Pessoa desconhecida.",
+                    "aviso"
+                );
+
+                mostrarEstadoMaiia(
+                    "Pessoa não registada no SmartAccess."
+                );
+
+                ultimoMomentoSemRosto = null;
+
+                await verificarCumprimento("desconhecido");
+
+                return;
+
+            }
+
+
+            // ---------------------------------------------
+            // PESSOA CONHECIDA
+            // ---------------------------------------------
+
+            const usuario = dadosResposta.usuario;
+
+            ultimoMomentoSemRosto = null;
+
+            mostrarDadosUsuario(
+                usuario,
+                dadosResposta.similaridade
+            );
+
+
+            // ---------------------------------------------
+            // ACESSO AUTORIZADO
+            // ---------------------------------------------
+
+            if (dadosResposta.autorizado) {
+
+                autenticado = true;
+
+                // Só activa o botão se a Maiia não estiver ocupada.
+                falar.disabled = ocupado;
+
+                mostrarResultado(
+                    "ACESSO AUTORIZADO",
+                    "sucesso"
+                );
+
+                if (!ocupado) {
+
+                    mostrarEstadoMaiia(
+                        "Utilizador autenticado. Podes conversar comigo."
+                    );
+
+                }
+
+            } else {
+
+                autenticado = false;
+                falar.disabled = true;
+
+                mostrarResultado(
+                    "ACESSO RECUSADO: utilizador bloqueado.",
+                    "erro"
+                );
+
+                mostrarEstadoMaiia(
+                    "Este utilizador não tem autorização para aceder."
+                );
+
+            }
+
+            await verificarCumprimento(
+                "usuario:" + usuario.id
+            );
+
+        } catch (erro) {
+
+            mostrarResultado(
+                erro.message,
+                "erro"
+            );
+
+        } finally {
+
+            analiseEmCurso = false;
+
+        }
+
+    }
+
+
+    // =====================================================
+    // INICIAR CÂMARA
+    // =====================================================
+
+    iniciar.addEventListener("click", async () => {
+
+        try {
+
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: "user"
+                },
+                audio: false
+            });
+
+            video.srcObject = stream;
+
+            iniciar.disabled = true;
+            analisar.disabled = false;
+            parar.disabled = false;
+
+            mostrarResultado(
+                "Câmara iniciada. A procurar rostos..."
+            );
+
+            estadoCamera.textContent = "Câmara ativa.";
+
+            mostrarEstadoMaiia(
+                "Aguardando reconhecimento facial."
+            );
+
+            ultimaIdentidade = null;
+            ultimoMomentoSemRosto = null;
+
+            // Primeira análise.
+            await analisarRosto();
+
+            // Análises automáticas.
+            intervaloReconhecimento = setInterval(
+                analisarRosto,
+                INTERVALO_RECONHECIMENTO
+            );
+
+        } catch (erro) {
+
+            mostrarResultado(
+                "Erro ao aceder à câmara: " + erro.message,
+                "erro"
+            );
+
+        }
+
+    });
+
+
+    // =====================================================
+    // ANÁLISE MANUAL
+    // =====================================================
+
+    analisar.addEventListener("click", async () => {
+
+        await analisarRosto();
+
+    });
+
+
+    // =====================================================
+    // GRAVAR ÁUDIO
+    // =====================================================
+
+    falar.addEventListener("click", async () => {
+
+        if (!autenticado) {
+            mostrarEstadoMaiia(
+                "É necessário autenticar-se primeiro."
+            );
+            return;
+        }
+
+        // Não permitir nova gravação enquanto a Maiia está ocupada.
+        if (ocupado) {
+            return;
+        }
+
+        // Se já estiver a gravar, terminar a gravação.
+        if (gravador && gravador.state === "recording") {
+
+            ocupado = true;
+            falar.disabled = true;
+
+            gravador.stop();
+
+            mostrarEstadoMaiia(
+                "A enviar o áudio para a Maiia..."
+            );
+
+            return;
+
+        }
+
+        try {
+
+            audioStream = await navigator.mediaDevices.getUserMedia({
+                audio: true
+            });
+
+            let tipoAudio = "";
+
+            if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+
+                tipoAudio = "audio/webm;codecs=opus";
+
+            } else if (MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")) {
+
+                tipoAudio = "audio/ogg;codecs=opus";
+
+            }
+
+            gravador = tipoAudio
+                ? new MediaRecorder(audioStream, { mimeType: tipoAudio })
+                : new MediaRecorder(audioStream);
+
+            partesAudio = [];
+
+            gravador.ondataavailable = evento => {
+
+                if (evento.data.size > 0) {
+                    partesAudio.push(evento.data);
+                }
+
+            };
+
+            gravador.onstop = async () => {
+
+                if (audioStream) {
+                    audioStream.getTracks().forEach(track => track.stop());
+                    audioStream = null;
+                }
+
+                if (cancelarGravacao) {
+                    partesAudio = [];
+                    return;
+                }
+
+                const blob = new Blob(partesAudio, {
+                    type: gravador.mimeType
+                });
+
+                await enviarAudio(blob);
+
+            };
+
+            cancelarGravacao = false;
+
+            gravador.start();
+
+            falar.textContent = "Terminar gravação";
+
+            mostrarEstadoMaiia(
+                "Estou a ouvir. Fala agora..."
+            );
+
+        } catch (erro) {
+
+            mostrarEstadoMaiia(
+                "Erro ao aceder ao microfone: " + erro.message
+            );
+
+        }
+
+    });
+
+
+    // =====================================================
+    // ENVIAR ÁUDIO PARA O BACKEND
+    // =====================================================
+
+    async function enviarAudio(blob) {
+
+        ocupado = true;
+        falar.disabled = true;
+
+        try {
+
+            if (!blob || blob.size === 0) {
+                throw new Error("A gravação está vazia.");
+            }
+
+            const dados = new FormData();
+
+            const extensao = blob.type.includes("ogg")
+                ? "ogg"
+                : "webm";
+
+            dados.append(
+                "audio",
+                blob,
+                "gravacao." + extensao
+            );
+
+            mostrarEstadoMaiia(
+                "A Maiia está a processar..."
+            );
+
+            const resposta = await fetch("/api/maiia/conversar", {
+                method: "POST",
+                body: dados
+            });
+
+            const dadosResposta = await resposta.json();
+
+            if (!resposta.ok) {
+
+                throw new Error(
+                    dadosResposta.erro ||
+                    "Não foi possível processar o áudio."
+                );
+
+            }
+
+            // As mensagens anteriores são mantidas no ecrã.
+
+            const mensagemUsuario = document.createElement("p");
+            mensagemUsuario.textContent =
+                "Tu: " + dadosResposta.texto_usuario;
+
+            const mensagemMaiia = document.createElement("p");
+            mensagemMaiia.textContent =
+                "Maiia: " + dadosResposta.resposta;
+
+            conversa.appendChild(mensagemUsuario);
+            conversa.appendChild(mensagemMaiia);
+
+            mensagemMaiia.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+            await reproduzirAudio(dadosResposta.audio_url);
+
+        } catch (erro) {
+
+            mostrarEstadoMaiia(
+                "Erro: " + erro.message
+            );
+
+        } finally {
+
+            ocupado = false;
+
+            falar.textContent = "Falar com Maiia";
+            falar.disabled = !autenticado;
+
+        }
+
+    }
+
+
+    // =====================================================
+    // PARAR CÂMARA E TERMINAR SESSÃO
+    // =====================================================
+
+    parar.addEventListener("click", async () => {
+
+        if (intervaloReconhecimento) {
+
+            clearInterval(intervaloReconhecimento);
+            intervaloReconhecimento = null;
+
+        }
+
+        if (gravador && gravador.state === "recording") {
+
+            // Descartar a gravação em vez de a enviar.
+            cancelarGravacao = true;
+
+            gravador.stop();
+
+        }
+
+        if (audioStream) {
+
+            audioStream.getTracks().forEach(track => track.stop());
+            audioStream = null;
+
+        }
+
+        if (stream) {
+
+            stream.getTracks().forEach(track => track.stop());
+
+            video.srcObject = null;
+            stream = null;
+
+        }
+
+        iniciar.disabled = false;
+        analisar.disabled = true;
+        parar.disabled = true;
+        falar.disabled = true;
+
+        falar.textContent = "Falar com Maiia";
+
+        autenticado = false;
+        ocupado = false;
+
+        ultimaIdentidade = null;
+        ultimoMomentoSemRosto = null;
+
+        limparDadosUsuario();
+
+        audioMaiia.pause();
+        audioMaiia.removeAttribute("src");
+        audioMaiia.style.display = "none";
+
+        conversa.innerHTML = "";
+
+        mostrarResultado("Câmara desligada.");
+
+        mostrarEstadoMaiia(
+            "Aguardando início da câmara."
+        );
+
+        estadoCamera.textContent = "Câmara desligada.";
+
+        try {
+
+            await fetch("/api/logout", {
+                method: "POST"
+            });
+
+        } catch (erro) {
+
+            console.error(
+                "Não foi possível terminar a sessão:",
+                erro
+            );
+
+        }
+
+    });
+
+</script>
+
+</body>
+</html>
